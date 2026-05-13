@@ -26,13 +26,19 @@ export interface Paper {
   year: number;
   tags: string[];
   description: string;
-  pdf_url: string;
+  pdf_url: string;         // legacy field
+  file_url?: string | null; // ✅ Supabase storage URL
+  file_name?: string | null;
+  file_size?: number | null;
   thumbnail_url?: string | null;
-  uploaded_by: string;
+  uploaded_by?: string;
+  uploader_id?: string | null;
   uploader?: Profile;
   downloads: number;
   likes: number;
-  approved: boolean;
+  approved?: boolean;
+  status?: 'pending' | 'approved' | 'rejected';
+  type?: 'paper' | 'note';
   created_at: string;
   is_liked?: boolean;
   is_bookmarked?: boolean;
