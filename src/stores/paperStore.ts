@@ -1,11 +1,10 @@
 // ========================================
-// Paper Store — Zustand + Supabase
+// Paper Store — Zustand + Supabase (No Mock Data)
 // ========================================
 import { create } from 'zustand';
 import type { Paper, PaperFilters, Comment, Bookmark } from '@/types';
-import { generateMockPapers } from '@/lib/utils';
 import { PAGE_SIZE } from '@/lib/constants';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 interface PaperState {
   papers: Paper[];
@@ -44,50 +43,12 @@ const defaultFilters: PaperFilters = {
   sortBy: 'newest',
 };
 
-// Mock data fallback (used when Supabase is not configured or has no data yet)
-const allMockPapers = generateMockPapers(60);
-
-function filterMockPapers(papers: Paper[], filters: PaperFilters): Paper[] {
-  let result = [...papers];
-  if (filters.search) {
-    const q = filters.search.toLowerCase();
-    result = result.filter(
-      (p) =>
-        p.title.toLowerCase().includes(q) ||
-        p.subject.toLowerCase().includes(q) ||
-        p.description.toLowerCase().includes(q) ||
-        p.tags.some((t) => t.toLowerCase().includes(q))
-    );
-  }
-  if (filters.subject) result = result.filter((p) => p.subject === filters.subject);
-  if (filters.semester) result = result.filter((p) => p.semester === filters.semester);
-  if (filters.university) result = result.filter((p) => p.university === filters.university);
-  if (filters.year) result = result.filter((p) => p.year === filters.year);
-  if (filters.course) result = result.filter((p) => p.course === filters.course);
-
-  switch (filters.sortBy) {
-    case 'newest':
-      result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      break;
-    case 'oldest':
-      result.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-      break;
-    case 'most_downloaded':
-      result.sort((a, b) => b.downloads - a.downloads);
-      break;
-    case 'most_liked':
-      result.sort((a, b) => b.likes - a.likes);
-      break;
-    case 'trending':
-      result.sort((a, b) => (b.downloads + b.likes * 3) - (a.downloads + a.likes * 3));
-      break;
-  }
-  return result;
-}
-
 // Build Supabase query from filters
 function buildSupabaseQuery(filters: PaperFilters) {
-  let query = supabase.from('papers').select('*', { count: 'exact' });
+  let query = supabase
+    .from('papers')
+    .select('*', { count: 'exact' })
+    .eq('status', 'approved');
 
   if (filters.search) {
     query = query.or(
@@ -135,16 +96,6 @@ export const usePaperStore = create<PaperState>((set, get) => ({
 
   fetchPapers: async () => {
     set({ isLoading: true, page: 0 });
-
-    if (!isSupabaseConfigured()) {
-      // Fallback to mock data
-      await new Promise((r) => setTimeout(r, 400));
-      const { filters } = get();
-      const filtered = filterMockPapers(allMockPapers, filters);
-      set({ papers: filtered.slice(0, PAGE_SIZE), hasMore: filtered.length > PAGE_SIZE, page: 1, isLoading: false });
-      return;
-    }
-
     try {
       const { filters } = get();
       const { data, count, error } = await buildSupabaseQuery(filters).range(0, PAGE_SIZE - 1);
@@ -155,115 +106,82 @@ export const usePaperStore = create<PaperState>((set, get) => ({
         page: 1,
         isLoading: false,
       });
-    } catch {
-      // Fallback to mock on error
-      const { filters } = get();
-      const filtered = filterMockPapers(allMockPapers, filters);
-      set({ papers: filtered.slice(0, PAGE_SIZE), hasMore: filtered.length > PAGE_SIZE, page: 1, isLoading: false });
+    } catch (err) {
+      console.error('fetchPapers error:', err);
+      set({ papers: [], isLoading: false });
     }
   },
 
   fetchMorePapers: async () => {
     const { page, filters, papers } = get();
     set({ isLoading: true });
-
-    if (!isSupabaseConfigured()) {
-      await new Promise((r) => setTimeout(r, 300));
-      const filtered = filterMockPapers(allMockPapers, filters);
-      const start = page * PAGE_SIZE;
-      const newPapers = filtered.slice(start, start + PAGE_SIZE);
-      set({ papers: [...papers, ...newPapers], hasMore: start + PAGE_SIZE < filtered.length, page: page + 1, isLoading: false });
-      return;
-    }
-
     try {
       const start = page * PAGE_SIZE;
       const { data, error } = await buildSupabaseQuery(filters).range(start, start + PAGE_SIZE - 1);
       if (error) throw error;
       const newPapers = (data as Paper[]) || [];
-      set({ papers: [...papers, ...newPapers], hasMore: newPapers.length === PAGE_SIZE, page: page + 1, isLoading: false });
-    } catch {
+      set({
+        papers: [...papers, ...newPapers],
+        hasMore: newPapers.length === PAGE_SIZE,
+        page: page + 1,
+        isLoading: false,
+      });
+    } catch (err) {
+      console.error('fetchMorePapers error:', err);
       set({ isLoading: false });
     }
   },
 
   fetchTrending: async () => {
-    if (!isSupabaseConfigured()) {
-      await new Promise((r) => setTimeout(r, 300));
-      const trending = [...allMockPapers]
-        .sort((a, b) => (b.downloads + b.likes * 3) - (a.downloads + a.likes * 3))
-        .slice(0, 8);
-      set({ trendingPapers: trending });
-      return;
-    }
-
     try {
       const { data, error } = await supabase
         .from('papers')
         .select('*')
+        .eq('status', 'approved')
         .order('downloads', { ascending: false })
         .limit(8);
       if (error) throw error;
       set({ trendingPapers: (data as Paper[]) || [] });
-    } catch {
-      const trending = [...allMockPapers]
-        .sort((a, b) => (b.downloads + b.likes * 3) - (a.downloads + a.likes * 3))
-        .slice(0, 8);
-      set({ trendingPapers: trending });
+    } catch (err) {
+      console.error('fetchTrending error:', err);
+      set({ trendingPapers: [] });
     }
   },
 
   fetchRecent: async () => {
-    if (!isSupabaseConfigured()) {
-      await new Promise((r) => setTimeout(r, 300));
-      const recent = [...allMockPapers]
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, 8);
-      set({ recentPapers: recent });
-      return;
-    }
-
     try {
       const { data, error } = await supabase
         .from('papers')
         .select('*')
+        .eq('status', 'approved')
         .order('created_at', { ascending: false })
         .limit(8);
       if (error) throw error;
       set({ recentPapers: (data as Paper[]) || [] });
-    } catch {
-      const recent = [...allMockPapers]
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, 8);
-      set({ recentPapers: recent });
+    } catch (err) {
+      console.error('fetchRecent error:', err);
+      set({ recentPapers: [] });
     }
   },
 
   fetchPaperById: async (id: string) => {
-    set({ isLoading: true });
-
-    if (!isSupabaseConfigured()) {
-      await new Promise((r) => setTimeout(r, 300));
-      const paper = allMockPapers.find((p) => p.id === id) || allMockPapers[0]!;
-      set({ currentPaper: paper, comments: [], isLoading: false });
-      return;
-    }
-
+    set({ isLoading: true, currentPaper: null, comments: [] });
     try {
-      const [{ data: paper, error: paperError }, { data: comments, error: commentsError }] = await Promise.all([
+      const [{ data: paper, error: paperError }, { data: comments }] = await Promise.all([
         supabase.from('papers').select('*').eq('id', id).single(),
         supabase.from('comments').select('*, user:profiles(*)').eq('paper_id', id).order('created_at', { ascending: false }),
       ]);
 
       if (paperError) throw paperError;
+
       set({
         currentPaper: paper as Paper,
         comments: (comments as Comment[]) || [],
         isLoading: false,
       });
-    } catch {
-      const paper = allMockPapers.find((p) => p.id === id) || allMockPapers[0]!;
-      set({ currentPaper: paper, comments: [], isLoading: false });
+    } catch (err) {
+      console.error('fetchPaperById error:', err);
+      set({ currentPaper: null, isLoading: false });
     }
   },
 
@@ -278,25 +196,21 @@ export const usePaperStore = create<PaperState>((set, get) => ({
   },
 
   toggleLike: async (paperId: string) => {
-    // Optimistic update first
     set((state) => ({
       papers: state.papers.map((p) =>
-        p.id === paperId ? { ...p, is_liked: !p.is_liked, likes: p.is_liked ? p.likes - 1 : p.likes + 1 } : p
+        p.id === paperId ? { ...p, is_liked: !p.is_liked, likes: (p.likes ?? 0) + (p.is_liked ? -1 : 1) } : p
       ),
       currentPaper: state.currentPaper?.id === paperId
-        ? { ...state.currentPaper, is_liked: !state.currentPaper.is_liked, likes: state.currentPaper.is_liked ? state.currentPaper.likes - 1 : state.currentPaper.likes + 1 }
+        ? { ...state.currentPaper, is_liked: !state.currentPaper.is_liked, likes: (state.currentPaper.likes ?? 0) + (state.currentPaper.is_liked ? -1 : 1) }
         : state.currentPaper,
       trendingPapers: state.trendingPapers.map((p) =>
-        p.id === paperId ? { ...p, is_liked: !p.is_liked, likes: p.is_liked ? p.likes - 1 : p.likes + 1 } : p
+        p.id === paperId ? { ...p, is_liked: !p.is_liked, likes: (p.likes ?? 0) + (p.is_liked ? -1 : 1) } : p
       ),
     }));
 
-    // Persist to Supabase
-    if (isSupabaseConfigured()) {
-      const paper = get().papers.find(p => p.id === paperId) || get().currentPaper;
-      if (paper) {
-        await supabase.from('papers').update({ likes: paper.likes }).eq('id', paperId);
-      }
+    const paper = get().currentPaper || get().papers.find(p => p.id === paperId);
+    if (paper) {
+      await supabase.from('papers').update({ likes: paper.likes }).eq('id', paperId);
     }
   },
 
@@ -312,35 +226,21 @@ export const usePaperStore = create<PaperState>((set, get) => ({
   },
 
   addComment: async (paperId: string, content: string) => {
-    if (isSupabaseConfigured()) {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-        const { data, error } = await supabase
-          .from('comments')
-          .insert({ paper_id: paperId, user_id: user.id, content })
-          .select('*, user:profiles(*)')
-          .single();
+      const { data, error } = await supabase
+        .from('comments')
+        .insert({ paper_id: paperId, user_id: user.id, content })
+        .select('*, user:profiles(*)')
+        .single();
 
-        if (error) throw error;
-        set((state) => ({ comments: [data as Comment, ...state.comments] }));
-        return;
-      } catch {
-        // fall through to local
-      }
+      if (error) throw error;
+      set((state) => ({ comments: [data as Comment, ...state.comments] }));
+    } catch (err) {
+      console.error('addComment error:', err);
     }
-
-    // Local fallback
-    const newComment: Comment = {
-      id: `c-${Date.now()}`,
-      user_id: 'user-demo',
-      paper_id: paperId,
-      content,
-      user: { id: 'user-demo', name: 'Demo User', email: 'demo@studystack.com', avatar: null, role: 'student', university: 'MIT', bio: null, created_at: new Date().toISOString() },
-      created_at: new Date().toISOString(),
-    };
-    set((state) => ({ comments: [newComment, ...state.comments] }));
   },
 
   setViewMode: (mode: 'grid' | 'list') => set({ viewMode: mode }),
