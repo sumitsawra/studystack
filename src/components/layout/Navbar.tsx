@@ -173,7 +173,7 @@ export function Navbar() {
                           Upload Paper
                         </Link>
                         <Link
-                          to="/profile"
+                          to="/dashboard"
                           onClick={() => setShowUserMenu(false)}
                           className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-secondary hover:text-primary hover:bg-[var(--color-bg-tertiary)] transition-colors"
                         >
