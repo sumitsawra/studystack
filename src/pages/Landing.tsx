@@ -3,18 +3,19 @@
 // ========================================
 import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion, useInView } from 'framer-motion';
+import { motion, useInView, AnimatePresence } from 'framer-motion';
 import {
   Search, ArrowRight, Download, Users, FileText, Star,
   Sparkles, TrendingUp, BookOpen, Zap, Shield, Globe,
+  ChevronRight, Building2, GraduationCap, BookMarked, FlaskConical, RotateCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge, Avatar } from '@/components/ui/Elements';
 import { PaperCard } from '@/components/papers/PaperCard';
 import { usePaperStore } from '@/stores/paperStore';
-import { formatNumber, getSubjectIcon } from '@/lib/utils';
-import { SUBJECTS } from '@/lib/constants';
+import { formatNumber } from '@/lib/utils';
+import { SUBJECTS, UNIVERSITIES, COURSES, SEMESTERS } from '@/lib/constants';
 import { supabase } from '@/lib/supabase';
 
 export default function Landing() {
@@ -95,8 +96,8 @@ export default function Landing() {
         </section>
       )}
 
-      {/* CATEGORIES */}
-      <CategoriesSection />
+      {/* SMART FINDER */}
+      <SmartFinderSection />
 
       {/* FEATURES */}
       <FeaturesSection />
@@ -140,13 +141,141 @@ export default function Landing() {
   );
 }
 
+// ============================================================
+// Smart Step-by-Step Finder
+// ============================================================
+function SmartFinderSection() {
+  const navigate = useNavigate();
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true, margin: '-50px' });
+
+  const [step, setStep] = useState(0);
+  const [selected, setSelected] = useState({ university: '', course: '', semester: '', subject: '' });
+
+  const steps = [
+    { key: 'university', label: 'University', icon: <Building2 className="w-4 h-4" />, items: UNIVERSITIES },
+    { key: 'course',     label: 'Course',     icon: <GraduationCap className="w-4 h-4" />, items: COURSES },
+    { key: 'semester',   label: 'Semester',   icon: <BookMarked className="w-4 h-4" />,    items: SEMESTERS.map((s) => String(s)) },
+    { key: 'subject',    label: 'Subject',    icon: <FlaskConical className="w-4 h-4" />,  items: SUBJECTS },
+  ];
+
+  const handleSelect = (key: string, value: string) => {
+    const newSelected = { ...selected, [key]: value };
+    setSelected(newSelected);
+
+    if (step < 3) {
+      setStep(step + 1);
+    } else {
+      // Navigate to browse with all filters
+      const params = new URLSearchParams();
+      if (newSelected.university) params.set('university', newSelected.university);
+      if (newSelected.course) params.set('course', newSelected.course);
+      if (newSelected.semester) params.set('semester', newSelected.semester);
+      if (newSelected.subject) params.set('subject', newSelected.subject);
+      navigate(`/browse?${params.toString()}`);
+    }
+  };
+
+  const handleReset = () => {
+    setStep(0);
+    setSelected({ university: '', course: '', semester: '', subject: '' });
+  };
+
+  const currentStep = steps[step]!;
+
+  return (
+    <section ref={ref} className="py-20 px-4 bg-[var(--color-bg-tertiary)]/30">
+      <div className="max-w-4xl mx-auto">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={isInView ? { opacity: 1, y: 0 } : {}} className="text-center mb-12">
+          <h2 className="text-3xl sm:text-4xl font-bold text-primary mb-4">Find Your Papers</h2>
+          <p className="text-secondary max-w-xl mx-auto">Select step by step to find exactly what you need</p>
+        </motion.div>
+
+        {/* Step breadcrumb */}
+        <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
+          {steps.map((s, i) => (
+            <div key={s.key} className="flex items-center gap-2">
+              <button
+                onClick={() => i < step && setStep(i)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                  i === step
+                    ? 'bg-accent text-white border-accent'
+                    : i < step
+                    ? 'border-[var(--color-success)]/40 text-[var(--color-success)] cursor-pointer hover:opacity-80'
+                    : 'border-themed text-tertiary'
+                }`}
+              >
+                {s.icon}
+                <span>{s.label}</span>
+                {i < step && selected[s.key as keyof typeof selected] && (
+                  <span className="font-bold truncate max-w-[60px]">
+                    : {s.key === 'semester' ? `Sem ${selected[s.key as keyof typeof selected]}` : selected[s.key as keyof typeof selected]}
+                  </span>
+                )}
+              </button>
+              {i < steps.length - 1 && (
+                <ChevronRight className={`w-3.5 h-3.5 shrink-0 ${i < step ? 'text-[var(--color-success)]' : 'text-tertiary'}`} />
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Options grid */}
+        <AnimatePresence mode="wait">
+          <motion.div key={step} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.25 }}>
+            <Card padding="lg">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-accent/10 text-accent flex items-center justify-center">
+                    {currentStep.icon}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-primary text-sm">Select {currentStep.label}</p>
+                    <p className="text-xs text-tertiary">Step {step + 1} of 4</p>
+                  </div>
+                </div>
+                {step > 0 && (
+                  <button onClick={handleReset} className="flex items-center gap-1 text-xs text-tertiary hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-[var(--color-bg-tertiary)]">
+                    <RotateCcw className="w-3 h-3" /> Reset
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-56 overflow-y-auto">
+                {currentStep.items.map((item) => (
+                  <button
+                    key={item}
+                    onClick={() => handleSelect(currentStep.key, String(item))}
+                    className="text-left px-3 py-2.5 rounded-xl border border-themed text-sm text-secondary hover:border-[var(--color-accent)] hover:text-accent hover:bg-accent/5 transition-all duration-150 truncate"
+                  >
+                    {currentStep.key === 'semester' ? `Semester ${item}` : item}
+                  </button>
+                ))}
+              </div>
+            </Card>
+          </motion.div>
+        </AnimatePresence>
+
+        <div className="text-center mt-5">
+          <Link to="/browse" className="text-xs text-tertiary hover:text-secondary transition-colors">
+            Skip — browse all papers →
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ============================================================
+// Stats
+// ============================================================
 function StatsSection() {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: '-100px' });
   const [stats, setStats] = useState([
-    { icon: <FileText className="w-6 h-6" />, value: '...', label: 'Question Papers' },
-    { icon: <Users className="w-6 h-6" />, value: '...', label: 'Active Students' },
-    { icon: <Download className="w-6 h-6" />, value: '...', label: 'Downloads' },
+    { icon: <FileText className="w-6 h-6" />, value: '0', label: 'Question Papers' },
+    { icon: <Users className="w-6 h-6" />, value: '0', label: 'Active Students' },
+    { icon: <Download className="w-6 h-6" />, value: '0', label: 'Downloads' },
     { icon: <Star className="w-6 h-6" />, value: '4.9', label: 'Average Rating' },
   ]);
 
@@ -158,18 +287,14 @@ function StatsSection() {
           supabase.from('profiles').select('*', { count: 'exact', head: true }),
           supabase.from('papers').select('downloads').eq('status', 'approved'),
         ]);
-
         const totalDownloads = downloadsData?.reduce((sum, p) => sum + (p.downloads || 0), 0) || 0;
-
         setStats([
           { icon: <FileText className="w-6 h-6" />, value: formatNumber(papersCount || 0), label: 'Question Papers' },
           { icon: <Users className="w-6 h-6" />, value: formatNumber(usersCount || 0), label: 'Active Students' },
           { icon: <Download className="w-6 h-6" />, value: formatNumber(totalDownloads), label: 'Downloads' },
           { icon: <Star className="w-6 h-6" />, value: '4.9', label: 'Average Rating' },
         ]);
-      } catch {
-        // keep default values on error
-      }
+      } catch { /* keep defaults */ }
     };
     fetchStats();
   }, []);
@@ -189,68 +314,9 @@ function StatsSection() {
   );
 }
 
-function CategoriesSection() {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: '-50px' });
-  const [categories, setCategories] = useState(
-    SUBJECTS.slice(0, 12).map((name) => ({ name, icon: getSubjectIcon(name), count: 0 }))
-  );
-
-  useEffect(() => {
-    const fetchCounts = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('papers')
-          .select('subject')
-          .eq('status', 'approved');
-
-        if (error || !data) return;
-
-        // Count papers per subject
-        const counts: Record<string, number> = {};
-        data.forEach((p) => {
-          if (p.subject) counts[p.subject] = (counts[p.subject] || 0) + 1;
-        });
-
-        setCategories(
-          SUBJECTS.slice(0, 12).map((name) => ({
-            name,
-            icon: getSubjectIcon(name),
-            count: counts[name] || 0,
-          }))
-        );
-      } catch {
-        // keep 0 counts on error
-      }
-    };
-    fetchCounts();
-  }, []);
-
-  return (
-    <section ref={ref} className="py-20 px-4 bg-[var(--color-bg-tertiary)]/30">
-      <div className="max-w-7xl mx-auto">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={isInView ? { opacity: 1, y: 0 } : {}} className="text-center mb-12">
-          <h2 className="text-3xl sm:text-4xl font-bold text-primary mb-4">Browse by Subject</h2>
-          <p className="text-secondary max-w-xl mx-auto">Explore papers across all major subjects</p>
-        </motion.div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {categories.map((c, i) => (
-            <motion.div key={c.name} initial={{ opacity: 0, scale: 0.9 }} animate={isInView ? { opacity: 1, scale: 1 } : {}} transition={{ delay: i * 0.05 }}>
-              <Link to={`/browse?subject=${encodeURIComponent(c.name)}`}>
-                <Card className="text-center hover:shadow-lg group" padding="md">
-                  <div className="text-3xl mb-3">{c.icon}</div>
-                  <h3 className="text-sm font-medium text-primary group-hover:text-accent transition-colors mb-1 truncate">{c.name}</h3>
-                  <p className="text-xs text-tertiary">{c.count > 0 ? `${formatNumber(c.count)} papers` : 'No papers yet'}</p>
-                </Card>
-              </Link>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
+// ============================================================
+// Features
+// ============================================================
 function FeaturesSection() {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: '-50px' });
@@ -284,12 +350,15 @@ function FeaturesSection() {
   );
 }
 
+// ============================================================
+// Testimonials
+// ============================================================
 function TestimonialsSection() {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: '-50px' });
   const testimonials = [
     { name: 'Priya Sharma', uni: 'IIT Delhi', text: 'StudyStack saved me during finals. Found every paper I needed!' },
-    { name: 'Alex Johnson', uni: 'MIT', text: 'The AI search is incredible. It actually understands what I\'m looking for.' },
+    { name: 'Alex Johnson', uni: 'MIT', text: "The AI search is incredible. It actually understands what I'm looking for." },
     { name: 'Sarah Chen', uni: 'Stanford', text: 'I love the PDF preview feature. No more downloading to check papers.' },
   ];
   return (
