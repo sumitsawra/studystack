@@ -17,14 +17,7 @@ export const SUBJECTS = [
 export const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 export const UNIVERSITIES = [
-  'MIT', 'Stanford University', 'Harvard University', 'California Institute of Technology', 'Princeton University', 'Yale University', 'Columbia University',
-  'University of Oxford', 'University of Cambridge', 'Imperial College London', 'ETH Zurich',
-  'National University of Singapore', 'University of Toronto', 'University of Melbourne', 'Tsinghua University',
-  'IIT Delhi', 'IIT Bombay', 'IIT Madras', 'IIT Kanpur', 'IIT Kharagpur', 'IIT Roorkee',
-  'NIT Trichy', 'NIT Surathkal', 'BITS Pilani', 'VIT Vellore',
-  'Delhi University', 'Mumbai University', 'Bangalore University', 'Anna University',
-  'Pune University', 'Calcutta University', 'Jadavpur University',
-  'Other',
+  'IK Gujral Punjab Technical University', 'MIT', 'Stanford University', 'Harvard University', 'California Institute of Technology', 'Princeton University', 'Yale University', 'Columbia University','Other',
 ];
 
 export const COURSES = [
