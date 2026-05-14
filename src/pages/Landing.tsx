@@ -15,6 +15,7 @@ import { PaperCard } from '@/components/papers/PaperCard';
 import { usePaperStore } from '@/stores/paperStore';
 import { formatNumber, getSubjectIcon } from '@/lib/utils';
 import { SUBJECTS } from '@/lib/constants';
+import { supabase } from '@/lib/supabase';
 
 export default function Landing() {
   const navigate = useNavigate();
@@ -77,20 +78,22 @@ export default function Landing() {
       <StatsSection />
 
       {/* TRENDING */}
-      <section className="py-20 px-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between mb-10">
-            <div>
-              <div className="flex items-center gap-2 mb-2"><TrendingUp className="w-5 h-5 text-accent" /><span className="text-sm font-medium text-accent">Trending</span></div>
-              <h2 className="text-3xl sm:text-4xl font-bold text-primary">Most Popular Papers</h2>
+      {trendingPapers.length > 0 && (
+        <section className="py-20 px-4">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex items-center justify-between mb-10">
+              <div>
+                <div className="flex items-center gap-2 mb-2"><TrendingUp className="w-5 h-5 text-accent" /><span className="text-sm font-medium text-accent">Trending</span></div>
+                <h2 className="text-3xl sm:text-4xl font-bold text-primary">Most Popular Papers</h2>
+              </div>
+              <Link to="/browse?sort=trending"><Button variant="secondary" size="sm">View All <ArrowRight className="w-4 h-4" /></Button></Link>
             </div>
-            <Link to="/browse?sort=trending"><Button variant="secondary" size="sm">View All <ArrowRight className="w-4 h-4" /></Button></Link>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {trendingPapers.slice(0, 4).map((paper, i) => (<PaperCard key={paper.id} paper={paper} index={i} />))}
+            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {trendingPapers.slice(0, 4).map((paper, i) => (<PaperCard key={paper.id} paper={paper} index={i} />))}
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* CATEGORIES */}
       <CategoriesSection />
@@ -99,20 +102,22 @@ export default function Landing() {
       <FeaturesSection />
 
       {/* RECENT */}
-      <section className="py-20 px-4 bg-[var(--color-bg-tertiary)]/30">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between mb-10">
-            <div>
-              <h2 className="text-3xl sm:text-4xl font-bold text-primary">Recently Uploaded</h2>
-              <p className="text-secondary mt-2">Fresh papers from the community</p>
+      {recentPapers.length > 0 && (
+        <section className="py-20 px-4 bg-[var(--color-bg-tertiary)]/30">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex items-center justify-between mb-10">
+              <div>
+                <h2 className="text-3xl sm:text-4xl font-bold text-primary">Recently Uploaded</h2>
+                <p className="text-secondary mt-2">Fresh papers from the community</p>
+              </div>
+              <Link to="/browse?sort=newest"><Button variant="secondary" size="sm">View All <ArrowRight className="w-4 h-4" /></Button></Link>
             </div>
-            <Link to="/browse?sort=newest"><Button variant="secondary" size="sm">View All <ArrowRight className="w-4 h-4" /></Button></Link>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {recentPapers.slice(0, 4).map((paper, i) => (<PaperCard key={paper.id} paper={paper} index={i} />))}
+            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {recentPapers.slice(0, 4).map((paper, i) => (<PaperCard key={paper.id} paper={paper} index={i} />))}
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* TESTIMONIALS */}
       <TestimonialsSection />
@@ -138,12 +143,37 @@ export default function Landing() {
 function StatsSection() {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: '-100px' });
-  const stats = [
-    { icon: <FileText className="w-6 h-6" />, value: '50K+', label: 'Question Papers' },
-    { icon: <Users className="w-6 h-6" />, value: '25K+', label: 'Active Students' },
-    { icon: <Download className="w-6 h-6" />, value: '1M+', label: 'Downloads' },
+  const [stats, setStats] = useState([
+    { icon: <FileText className="w-6 h-6" />, value: '...', label: 'Question Papers' },
+    { icon: <Users className="w-6 h-6" />, value: '...', label: 'Active Students' },
+    { icon: <Download className="w-6 h-6" />, value: '...', label: 'Downloads' },
     { icon: <Star className="w-6 h-6" />, value: '4.9', label: 'Average Rating' },
-  ];
+  ]);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const [{ count: papersCount }, { count: usersCount }, { data: downloadsData }] = await Promise.all([
+          supabase.from('papers').select('*', { count: 'exact', head: true }).eq('status', 'approved'),
+          supabase.from('profiles').select('*', { count: 'exact', head: true }),
+          supabase.from('papers').select('downloads').eq('status', 'approved'),
+        ]);
+
+        const totalDownloads = downloadsData?.reduce((sum, p) => sum + (p.downloads || 0), 0) || 0;
+
+        setStats([
+          { icon: <FileText className="w-6 h-6" />, value: formatNumber(papersCount || 0), label: 'Question Papers' },
+          { icon: <Users className="w-6 h-6" />, value: formatNumber(usersCount || 0), label: 'Active Students' },
+          { icon: <Download className="w-6 h-6" />, value: formatNumber(totalDownloads), label: 'Downloads' },
+          { icon: <Star className="w-6 h-6" />, value: '4.9', label: 'Average Rating' },
+        ]);
+      } catch {
+        // keep default values on error
+      }
+    };
+    fetchStats();
+  }, []);
+
   return (
     <section ref={ref} className="py-20 px-4">
       <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6">
@@ -162,7 +192,40 @@ function StatsSection() {
 function CategoriesSection() {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: '-50px' });
-  const categories = SUBJECTS.slice(0, 12).map((name) => ({ name, icon: getSubjectIcon(name), count: Math.floor(Math.random() * 5000) + 500 }));
+  const [categories, setCategories] = useState(
+    SUBJECTS.slice(0, 12).map((name) => ({ name, icon: getSubjectIcon(name), count: 0 }))
+  );
+
+  useEffect(() => {
+    const fetchCounts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('papers')
+          .select('subject')
+          .eq('status', 'approved');
+
+        if (error || !data) return;
+
+        // Count papers per subject
+        const counts: Record<string, number> = {};
+        data.forEach((p) => {
+          if (p.subject) counts[p.subject] = (counts[p.subject] || 0) + 1;
+        });
+
+        setCategories(
+          SUBJECTS.slice(0, 12).map((name) => ({
+            name,
+            icon: getSubjectIcon(name),
+            count: counts[name] || 0,
+          }))
+        );
+      } catch {
+        // keep 0 counts on error
+      }
+    };
+    fetchCounts();
+  }, []);
+
   return (
     <section ref={ref} className="py-20 px-4 bg-[var(--color-bg-tertiary)]/30">
       <div className="max-w-7xl mx-auto">
@@ -177,7 +240,7 @@ function CategoriesSection() {
                 <Card className="text-center hover:shadow-lg group" padding="md">
                   <div className="text-3xl mb-3">{c.icon}</div>
                   <h3 className="text-sm font-medium text-primary group-hover:text-accent transition-colors mb-1 truncate">{c.name}</h3>
-                  <p className="text-xs text-tertiary">{formatNumber(c.count)} papers</p>
+                  <p className="text-xs text-tertiary">{c.count > 0 ? `${formatNumber(c.count)} papers` : 'No papers yet'}</p>
                 </Card>
               </Link>
             </motion.div>
